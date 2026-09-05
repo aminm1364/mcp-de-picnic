@@ -24,14 +24,15 @@ https://storefront-prod.{country}.picnicinternational.com/api/{version}
 ```
 
 - `{country}` — lowercase ISO 3166-1 alpha-2 code. Picnic only operates in `de` and `nl`.
-- `{version}` — `15`. This is the "classic" flat-JSON API version used by the
-  long-standing wrappers above. Picnic also has a newer PML/"page renderer" API
-  (`/pages/search-page-results`, etc.) used internally by the current mobile app, but its
-  responses are deeply-nested UI-description blobs that are harder to parse reliably.
-  Version 15's flat JSON is simpler and more stable for a tool-calling interface, so this
-  project deliberately targets it. If Picnic retires v15, the fix is to switch
-  `API_VERSION` in `picnic_client.py` and adjust `search_products()` parsing (see note
-  under Search below).
+- `{version}` — `15`. `/cart`, `/cart/add_product`, `/cart/remove_product`,
+  `/cart/clear`, and `/cart/delivery_slots` all still return simple flat JSON on this
+  version, verified live against a real DE account on 2026-09-05. **Search does not**:
+  the classic `GET /search?search_term=` endpoint the older wrappers document now
+  returns a real `404 {"error":{"code":"NOT_FOUND", ...}}` — Picnic has retired it.
+  Search now has to go through the newer PML/"page renderer" API instead (see below).
+  If Picnic ever retires the classic cart endpoints too, the fix is the same pattern:
+  find the new path, and adjust `picnic_client.py` accordingly — that's the whole
+  point of keeping this file up to date.
 
 ## Headers
 
@@ -92,36 +93,44 @@ session token. Wrong/expired code → `400`/`401` with a JSON error body.
 
 ## Search
 
-### `GET /search?search_term=<url-encoded query>`
+### ~~`GET /search?search_term=<query>`~~ — confirmed dead (404), do not use
 
-Returns a JSON array of category-like groups, each shaped roughly like:
+This is what MikeBrink/daviddemeij's wrappers implement, and it's how this project
+originally implemented search too. Tested live on 2026-09-05 against a real DE account:
+`404 {"error":{"code":"NOT_FOUND","message":"Not Found","details":{}}}`. Picnic has
+retired it. Kept here as a note so nobody re-adds it by copying an older reference.
+
+### `GET /pages/search-page-results?search_term=<url-encoded query>`
+
+This is what the current mobile app actually uses (confirmed working live). It returns
+a "page" object — a deeply nested UI component tree (Picnic calls this their PML /
+Fusion page format), not a flat product list. We don't model that tree at all. Product
+data shows up wherever a `sellingUnit` key appears, at whatever depth, shaped like:
 
 ```json
-[
-  {
-    "type": "CATEGORY",
-    "id": "...",
-    "name": "...",
-    "items": [
-      {
-        "type": "SINGLE_ARTICLE",
-        "id": "s1234567",
-        "name": "...",
-        "price": 219,
-        "display_price": 219,
-        "unit_quantity": "500 gram",
-        "image_id": "...",
-        "max_count": 99
-      }
-    ]
+{
+  "sellingUnit": {
+    "id": "s1019257",
+    "name": "Arla Bio Bio Frische Weidemilch 1,5%",
+    "display_price": 179,
+    "unit_quantity": "1L",
+    "image_id": "...",
+    "max_count": 50,
+    "decorators": [],
+    "price_ranges": null
   }
-]
+}
 ```
 
-Categories can nest sub-categories with their own `items`. `picnic_client.py` walks the
-whole tree recursively and collects every dict that looks like a product (`type ==
-"SINGLE_ARTICLE"`, has `id`/`name`), so nesting depth doesn't matter. Prices are integer
-cents; we divide by 100 for display.
+`picnic_client.py`'s `_iter_selling_units()` recursively walks the whole response and
+yields every `sellingUnit` value it finds, wherever it's nested — this is the same
+technique MRVDH/picnic-api uses (a JSONPath `$..sellingUnit` query) reimplemented as a
+plain recursive walk. **The same product commonly appears more than once** in the page
+tree (e.g. once in the main result grid, again in a "you might also like" rail), so
+`search_products()` de-duplicates by `id` before returning results. Note the field here
+is `display_price` — no plain `price` key was observed on this endpoint; we still fall
+back to `price` if present, since discounted items elsewhere in the API do carry both.
+Prices are integer cents; we divide by 100 for display.
 
 ## Cart
 

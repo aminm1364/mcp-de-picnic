@@ -64,22 +64,26 @@ def _money(cents: Any) -> float | None:
         return None
 
 
-def _iter_products(node: Any) -> Iterator[dict]:
-    """Recursively walk a /search response (nested categories) and yield product dicts.
+def _iter_selling_units(node: Any) -> Iterator[dict]:
+    """Recursively walk a /pages/search-page-results response and yield product dicts.
 
-    Picnic groups results into categories that can themselves nest sub-categories, so we
-    don't assume a fixed depth: anything shaped like a product (a dict with an id/name
-    and the SINGLE_ARTICLE type) is yielded, wherever it appears in the tree.
+    Picnic's search now returns a deeply-nested "page" description (a UI component
+    tree) rather than a flat list. Product data lives wherever a "sellingUnit" key
+    appears, at whatever depth — confirmed live against a real account on 2026-09-05,
+    after the older flat /search endpoint turned out to have been retired (404). We
+    don't try to model the rest of the page tree at all; we just walk every dict/list
+    looking for that one key.
     """
     if isinstance(node, dict):
-        if node.get("type") == "SINGLE_ARTICLE" and "id" in node and "name" in node:
-            yield node
+        selling_unit = node.get("sellingUnit")
+        if isinstance(selling_unit, dict) and "id" in selling_unit and "name" in selling_unit:
+            yield selling_unit
         for value in node.values():
             if isinstance(value, (list, dict)):
-                yield from _iter_products(value)
+                yield from _iter_selling_units(value)
     elif isinstance(node, list):
         for item in node:
-            yield from _iter_products(item)
+            yield from _iter_selling_units(item)
 
 
 @dataclass
@@ -300,14 +304,19 @@ class PicnicClient:
 
     def search_products(self, query: str) -> list[dict]:
         self.ensure_login()
-        path = f"/search?search_term={quote(query)}"
+        path = f"/pages/search-page-results?search_term={quote(query)}"
         raw = self._request("GET", path)
         results = []
-        for product in _iter_products(raw or []):
+        seen_ids: set[str] = set()
+        for product in _iter_selling_units(raw or {}):
+            product_id = product.get("id")
+            if not product_id or product_id in seen_ids:
+                continue  # the page tree repeats the same product under several UI nodes
+            seen_ids.add(product_id)
             price = product.get("display_price", product.get("price"))
             results.append(
                 {
-                    "id": product.get("id"),
+                    "id": product_id,
                     "name": product.get("name"),
                     "price": _money(price),
                     "currency": "EUR",
