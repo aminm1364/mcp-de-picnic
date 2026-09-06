@@ -64,6 +64,14 @@ def _money(cents: Any) -> float | None:
         return None
 
 
+def _unavailable_decorator(article: dict) -> dict | None:
+    """Return the article's "UNAVAILABLE" decorator, if it has one (see get_cart)."""
+    for decorator in article.get("decorators", []) or []:
+        if decorator.get("type") == "UNAVAILABLE":
+            return decorator
+    return None
+
+
 def _iter_selling_units(node: Any) -> Iterator[dict]:
     """Recursively walk a /pages/search-page-results response and yield product dicts.
 
@@ -115,8 +123,7 @@ class PicnicClient:
                 "x-picnic-did": self._device_id,
             }
         )
-        if self.token_cache_path:
-            self._load_cached_token()
+        self._load_cached_token()
 
     # ---- state -----------------------------------------------------------------
 
@@ -125,6 +132,11 @@ class PicnicClient:
         return self._auth_token is not None
 
     def _load_cached_token(self) -> None:
+        # Subclasses may override this (and _save_cached_token) to use a shared store
+        # (e.g. Azure Blob Storage) instead of a local file — see the azure_functions_app
+        # deployment. The guard below is what makes the local-file behavior opt-in.
+        if not self.token_cache_path:
+            return
         try:
             with open(self.token_cache_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -179,9 +191,22 @@ class PicnicClient:
             raise PicnicRateLimitError(
                 "Picnic is rate-limiting this account or IP (429). Wait before retrying."
             )
-        raise PicnicRequestError(
-            f"Picnic API returned HTTP {response.status_code}: {self._extract_message(response)}"
-        )
+        message = self._extract_message(response)
+        if response.status_code == 403:
+            # Confirmed live 2026-09-05: login can return 200 with a usable token
+            # *without* second_factor_authentication_required in its own body, and only
+            # the first protected call after that reveals 2FA is still pending. Some
+            # endpoints (cart, delivery_slots) say so explicitly ("User must verify
+            # their second factor"); others (the search pages endpoint) return a bare
+            # 403 with no body at all for the identical cause. Since this is a
+            # single-user grocery account with no other permission tiers, we treat any
+            # 403 on an already-authenticated request as "2FA still pending" rather
+            # than trying to pattern-match a message that isn't always there.
+            raise Picnic2FARequiredError(
+                "This Picnic account requires a 2FA code. Call generate_2fa_code, then "
+                "verify_2fa_code with the code you receive."
+            )
+        raise PicnicRequestError(f"Picnic API returned HTTP {response.status_code}: {message}")
 
     @staticmethod
     def _extract_message(response: requests.Response) -> str:
@@ -339,17 +364,38 @@ class PicnicClient:
                 continue
             article = articles[0]
             quantity = len(articles)
-            items.append(
-                {
-                    "product_id": article.get("id"),
-                    "name": article.get("name"),
-                    "unit": article.get("unit_quantity"),
-                    "quantity": quantity,
-                    "unit_price": _money(article.get("price")),
-                    "line_total": _money(line.get("price")),
-                    "currency": "EUR",
-                }
-            )
+            item = {
+                "product_id": article.get("id"),
+                "name": article.get("name"),
+                "unit": article.get("unit_quantity"),
+                "quantity": quantity,
+                "currency": "EUR",
+            }
+            unavailable = _unavailable_decorator(article)
+            if unavailable:
+                # Confirmed live 2026-09-05: an out-of-stock article's own "price" is a
+                # sentinel (99999 cents = "€999.99"), not a real price — Picnic flags
+                # this via a decorator instead of just omitting/zeroing the price. The
+                # line's own price is correctly 0 in this case, so we trust that instead
+                # of the article-level sentinel, and surface the unavailability plainly
+                # rather than silently showing a fake four-figure price.
+                item["available"] = False
+                item["unavailable_reason"] = (
+                    (unavailable.get("explanation") or {}).get("short_explanation")
+                    or unavailable.get("reason")
+                )
+                item["unit_price"] = None
+                item["line_total"] = _money(line.get("price"))
+                replacement_ids = [
+                    r.get("id") for r in unavailable.get("replacements", []) or [] if r.get("id")
+                ]
+                if replacement_ids:
+                    item["suggested_replacement_ids"] = replacement_ids
+            else:
+                item["available"] = True
+                item["unit_price"] = _money(article.get("price"))
+                item["line_total"] = _money(line.get("price"))
+            items.append(item)
         return {
             "items": items,
             "total_count": raw.get("total_count"),

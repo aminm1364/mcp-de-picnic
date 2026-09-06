@@ -162,6 +162,35 @@ known quirk of Picnic's cart representation (confirmed against the TypeScript re
 types in MRVDH/picnic-api). `order_line.price` is the line total; each article's own
 `price` is the unit price.
 
+**Out-of-stock items carry a fake price — confirmed live 2026-09-05.** An article that's
+gone out of stock since being added gets an extra decorator:
+
+```json
+{
+  "type": "ORDER_ARTICLE",
+  "id": "s1108789",
+  "name": "Bio Rispentomaten",
+  "price": 99999,
+  "decorators": [
+    {
+      "type": "UNAVAILABLE",
+      "reason": "TEMPORARILY_UNAVAILABLE",
+      "replacements": [{"type": "REPLACEMENT", "id": "s1026911", "name": "irrelevant"}],
+      "explanation": {"short_explanation": "Am 7. Sep nicht verfügbar", "long_explanation": ""}
+    }
+  ]
+}
+```
+
+`article.price` becomes a sentinel (`99999` cents = a fake "€999.99") instead of being
+omitted or zeroed — Picnic signals unavailability only via the decorator, not via the
+price field. The *line's* own `price` correctly stays `0` in this case. `picnic_client.py`
+checks every article for a `decorators` entry with `type == "UNAVAILABLE"` and, when
+found, reports `available: false` with `unit_price: null` (never the sentinel),
+`unavailable_reason` from the decorator's `explanation.short_explanation`, and
+`suggested_replacement_ids` from `replacements[].id` — replacement `name` values are
+literally the string `"irrelevant"` in Picnic's response, so they're not surfaced.
+
 ### `POST /cart/add_product`
 
 ```json
