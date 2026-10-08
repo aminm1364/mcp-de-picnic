@@ -36,6 +36,7 @@ function buildServer(env: Env) {
       return { isError: true, content: [{ type: "text" as const, text: e instanceof PicnicError ? e.message : "Unexpected error." }] };
     }
   });
+  server.tool("add_recipe_to_cart", "Add a recipe's ingredient products to the cart, using the same quantities and pre-selection the Picnic app uses (pantry items Picnic leaves unchecked are skipped unless include_unchecked). Use dry_run to preview. Never places an order.", { recipe_id: z.string(), exclude_product_ids: z.array(z.string()).default([]), include_unchecked: z.boolean().default(false), dry_run: z.boolean().default(false) }, ({ recipe_id, exclude_product_ids, include_unchecked, dry_run }) => run(() => picnic.addRecipeToCart(recipe_id, { exclude: exclude_product_ids, includeUnchecked: include_unchecked, dryRun: dry_run }))());
   return server;
 }
 

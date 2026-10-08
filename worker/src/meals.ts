@@ -69,6 +69,7 @@ export function parseRecipe(page: any, id: string, base: string) {
   let heroId: string | null = null;
   let portions: number | null = null;
   const ingState: Record<string, any> = {};
+  const unitMeta: Record<string, { quantity: number; checked: boolean }> = {};
   for (const n of walk(page)) {
     const imgs = n.selling_group_image_data?.images?.images;
     if (!heroId && Array.isArray(imgs) && imgs.length) {
@@ -76,6 +77,7 @@ export function parseRecipe(page: any, id: string, base: string) {
       heroId = (p.namespace ? `${p.namespace}/` : "") + p.id;
     }
     if (portions == null && typeof n.portions === "number") portions = n.portions;
+    if (Array.isArray(n.selling_units)) for (const u of n.selling_units) if (u && typeof u.selling_unit_id === "string") unitMeta[u.selling_unit_id] = { quantity: Number(u.quantity) || 1, checked: u.checked !== false };
     if (typeof n.ingredientId === "string" && n.sellingUnits && typeof n.sellingUnits === "object") ingState[n.ingredientId] = n;
   }
 
@@ -96,6 +98,8 @@ export function parseRecipe(page: any, id: string, base: string) {
       brand: t[1] && !/^[\d.,]+$/.test(t[1]) && !/benötigt/.test(t[1]) ? t[1] : null,
       price: su ? su.price / 100 : null,
       needed: need ? need.replace(/[()]/g, "").replace(/ benötigt/, "") : null,
+      quantity: unitId && unitMeta[unitId] ? unitMeta[unitId].quantity : 1,
+      checked: unitId && unitMeta[unitId] ? unitMeta[unitId].checked : true,
       available: st ? st.isAvailable !== false : null,
       kind: st?.ingredientType ?? null,
     });

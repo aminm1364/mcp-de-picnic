@@ -165,6 +165,21 @@ export class PicnicClient {
     const raw = await this.call("GET", `/pages/selling-group-details-page?selling_group_id=${id}`);
     return parseRecipe(raw, id, this.origin);
   }
+  async addRecipeToCart(id: string, opts: { exclude: string[]; includeUnchecked: boolean; dryRun: boolean }) {
+    const recipe = await this.getRecipe(id);
+    const added: object[] = [];
+    const skipped: object[] = [];
+    for (const p of recipe.products_to_buy) {
+      const base = { product_id: p.product_id, name: p.name, quantity: p.quantity };
+      if (!p.product_id) { skipped.push({ ...base, reason: "no product id" }); continue; }
+      if (p.available === false) { skipped.push({ ...base, reason: "unavailable" }); continue; }
+      if (opts.exclude.includes(p.product_id)) { skipped.push({ ...base, reason: "excluded by you" }); continue; }
+      if (p.checked === false && !opts.includeUnchecked) { skipped.push({ ...base, reason: "not pre-selected by Picnic (likely a pantry item)" }); continue; }
+      if (!opts.dryRun) await this.call("POST", "/cart/add_product", { product_id: p.product_id, count: p.quantity ?? 1 });
+      added.push({ ...base, price: p.price });
+    }
+    return { recipe: recipe.title, portions: recipe.portions, dry_run: opts.dryRun, added, skipped, cart: opts.dryRun ? undefined : await this.getCart() };
+  }
   async fetchImage(id: string, size: ImageSize) {
     const url = imageUrl(this.origin, id, size);
     if (!url) throw new PicnicError("Invalid image id.");

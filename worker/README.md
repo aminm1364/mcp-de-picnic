@@ -20,6 +20,7 @@ your computer being on. Written in TypeScript, plain `fetch` calls, no Picnic wr
 | `search_recipes(query)` | Search Picnic's meals (Rezepte) |
 | `list_recipes(section)` | `cookbook`, `weekly_suggestions` or `ordered` |
 | `get_recipe(recipe_id)` | Description, time, portions, ingredients, products to buy (with `product_id`), nutrition, allergens, step-by-step instructions, image |
+| `add_recipe_to_cart(recipe_id, …)` | Adds a recipe's ingredient products to the cart with the app's own quantities and pre-selection (pantry items Picnic leaves unchecked are skipped unless `include_unchecked`; `exclude_product_ids`, `dry_run` supported) |
 | `get_image(image_id, size)` | A product or recipe picture as an image |
 
 It never places or confirms an order — there is no checkout tool.
