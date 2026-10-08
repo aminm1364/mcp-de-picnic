@@ -1,0 +1,17 @@
+// Copy to wrangler.jsonc (git-ignored) and fill in your own values. See README.md.
+{
+  "name": "picnic-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "vars": {
+    "PUBLIC_HOST": "picnic-mcp.example.com", // the hostname you serve this on
+    "PICNIC_COUNTRY": "DE"                    // "DE" or "NL"
+  },
+  "routes": [{ "pattern": "picnic-mcp.example.com", "custom_domain": true }],
+  "kv_namespaces": [
+    { "binding": "STATE", "id": "REPLACE_WITH_KV_ID" },      // encrypted Picnic session token
+    { "binding": "OAUTH_KV", "id": "REPLACE_WITH_KV_ID_2" }  // OAuth clients/grants/tokens
+  ]
+}

@@ -21,6 +21,14 @@ delivery service in **Germany and the Netherlands**.
 > - This server only ever talks to `*.picnicinternational.com`. It sends no telemetry,
 >   analytics, or data to anyone else.
 
+## Two ways to run it
+
+- **Remote on Cloudflare Workers (recommended) — [`worker/`](worker/README.md).** TypeScript.
+  One URL that works from Claude Code, claude.ai, Claude Desktop and the mobile app, protected by
+  Google sign-in (only your account). Also includes the meals/recipes tools and product images.
+- **Local over stdio — this folder's Python server (`src/mcp_de_picnic`).** The original version
+  described below; runs on your own machine only. It does **not** have the recipe or image tools.
+
 ## What it does
 
 | Tool | Description |

@@ -1,0 +1,8 @@
+# Placeholders only. For local `wrangler dev`, copy to .dev.vars (git-ignored).
+# In production set each one with `npx wrangler secret put <NAME>` — never commit real values.
+PICNIC_EMAIL=you@example.com
+PICNIC_PASSWORD=your-picnic-password
+STATE_KEY=base64-of-32-random-bytes        # openssl rand -base64 32 — encrypts the stored Picnic session token
+GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+ALLOWED_EMAIL=you@gmail.com                # the only Google account allowed to connect

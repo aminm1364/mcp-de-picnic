@@ -251,3 +251,20 @@ field is `true`, or its `slot_id` matches the top-level `selected_slot.slot_id`.
 `picnic_client.py` never lets a raw `requests` exception or HTTP body propagate as-is to
 the MCP tool layer — see `errors.py` for the small set of typed exceptions each tool
 catches and turns into a one-line, credential-free message.
+
+## Added for the remote (TypeScript) server
+
+These are used by [`worker/`](worker/) only. All are `GET` with the same headers and `x-picnic-auth`
+token as the endpoints above. Paths are relative to `https://storefront-prod.<de|nl>.picnicinternational.com`.
+
+| Purpose | Request | Notes |
+|---|---|---|
+| Recipe search | `/api/15/pages/search-page-results?search_term=<q>&page_context=MEALS&is_recipe=true` | Server-driven UI tree. Each recipe tile has `onPress.target` containing `selling_group_id=<24-hex>`, an `accessibilityLabel` (title/time) and an `IMAGE` node with `source.id` (`recipes/<hash>`). |
+| Meals tabs | `/api/15/pages/cookbook-page-content`, `/pages/meals-planner-root`, `/pages/meals-purchase-page-root` | "Alle Rezepte", "Wochenplan" (weekly suggestions), "Bestellt" (ordered). Root page: `/pages/meals-page-root`. Same tile structure. |
+| Recipe detail | `/api/15/pages/selling-group-details-page?selling_group_id=<id>` | ~2 MB UI tree. Text nodes carry the title, description, time, ingredients, nutrition, allergens and steps. Product rows carry the ingredient id in an analytics context; the embedded state (`ingredientId` → `sellingUnits`) maps it to `s…` product ids and prices (cents). Hero image: `selling_group_image_data.images.images[]`. |
+| Product images | `/static/images/<image_id>/<size>.png` | Public, no auth. Sizes: `tiny`, `small`, `medium`, `large`, `extra-large`. `image_id` comes from a product's `image_id` field. |
+| Recipe images | `/static/images/recipes/<hash>/<size>.png` | Public, no auth. |
+
+These pages are Picnic's server-driven UI, not a stable data API, so the parsers in
+[`worker/src/meals.ts`](worker/src/meals.ts) are best-effort and may need updating.
+

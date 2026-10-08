@@ -1,0 +1,24 @@
+{
+  "name": "picnic-mcp-worker",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p ."
+  },
+  "license": "MIT",
+  "description": "Remote MCP server for Picnic (unofficial) on Cloudflare Workers",
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.3",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "agents": "^0.27.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261008.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.148.0"
+  },
+  "private": true,
+  "type": "module"
+}
